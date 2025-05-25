@@ -1,5 +1,4 @@
 configparser
 javascript
-threading
 os
 sys
