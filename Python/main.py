@@ -1,4 +1,3 @@
-# main.py
 from configparser import ConfigParser
 from javascript import require, On
 import threading, os, random, time
@@ -18,9 +17,7 @@ app = Flask(__name__)
 def home():
     return "Bot is running"
 
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
-threading.Thread(target=run_flask).start()
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=10000), daemon=True).start()
 
 config = ConfigParser()
 config.read('config.ini')
@@ -33,12 +30,17 @@ def stop_actions():
             action()
     actions.clear()
 
-def start_bot():
-    bot = mineflayer.createBot({
-        'host': config.get('server', 'host'),
-        'port': int(config.get('server', 'port')),
-        'username': config.get('bot', 'name')
-    })
+def create_and_start_bot():
+    try:
+        bot = mineflayer.createBot({
+            'host': config.get('server', 'host'),
+            'port': int(config.get('server', 'port')),
+            'username': config.get('bot', 'name')
+        })
+    except Exception as e:
+        print(f"Error creating bot: {e}")
+        time.sleep(5)
+        return create_and_start_bot()
 
     bot.loadPlugin(pathfinder)
     bot.loadPlugin(collectBlock)
@@ -50,7 +52,9 @@ def start_bot():
 
     @On(bot, 'login')
     def on_login(this):
+        time.sleep(1)
         bot.chat(config.get('bot', 'register'))
+        time.sleep(1)
         bot.chat(config.get('bot', 'login'))
 
     @On(bot, 'chat')
@@ -66,10 +70,7 @@ def start_bot():
             bot.chat('Bot > All actions stopped.')
 
         elif msg == ';sleep':
-            bed = bot.findBlock({
-                'matching': bot.registry.blocksByName.bed.id,
-                'maxDistance': 16
-            })
+            bed = bot.findBlock({'matching': bot.registry.blocksByName.bed.id, 'maxDistance': 16})
             if bed:
                 bot.chat("Bot > Trying to sleep... 🛏️")
                 bot.sleep(bed, lambda err=None: bot.chat("Bot > Sleeping..." if not err else f"Bot > Can't sleep: {err}"))
@@ -86,13 +87,15 @@ def start_bot():
     def on_death(this):
         bot.chat("Bot > I died!")
 
+    @On(bot, 'end')
+    def on_end(this):
+        print("Bot disconnected. Reconnecting in 5 seconds...")
+        time.sleep(5)
+        create_and_start_bot()
+
     def random_movement():
         directions = ['forward', 'back', 'left', 'right']
-        while True:
-            if not bot.entity:
-                continue
-            if not actions.get('random_walk'):
-                break
+        while actions.get('random_walk'):
             dir = random.choice(directions)
             bot.setControlState(dir, True)
             time.sleep(random.uniform(1, 2))
@@ -113,9 +116,7 @@ def start_bot():
 
     def auto_attack():
         def loop():
-            while True:
-                if not actions.get('attack'):
-                    break
+            while actions.get('attack'):
                 entity = bot.nearestEntity(lambda e: e.type == 'mob' and e.mobType != 'ArmorStand')
                 if entity:
                     bot.pvp.attack(entity)
@@ -127,4 +128,5 @@ def start_bot():
     auto_eat()
     auto_attack()
 
-threading.Thread(target=start_bot).start()
+# شروع با اتصال اولیه
+threading.Thread(target=create_and_start_bot).start()
