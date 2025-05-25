@@ -1,88 +1,84 @@
 from configparser import ConfigParser
 from javascript import require, On
-import threading, os
+import threading, os, time
 from sys import platform
+from flask import Flask
+import _thread
 
 mineflayer = require('mineflayer')
 
-### By Fortcote
-### https://discord.gg/bjgpVAxgyE
-
 config = ConfigParser()
-
-# مسیر دقیق config.ini رو تنظیم کن (فرض: config.ini کنار همین فایل main.py هست)
 config_path = os.path.join(os.path.dirname(__file__), 'config.ini')
-print(f"Reading config from: {config_path}")
-
-# حالا فایل کانفیگ رو بخون
 config.read(config_path)
 
-# برای اطمینان، بخش‌های فایل کانفیگ رو چاپ کن
+print("Reading config from:", config_path)
 print("Config sections:", config.sections())
 
-def started(stop):
-    bot = mineflayer.createBot({
-        'host': config.get('server', 'host'),
-        'port': int(config.get('server', 'port')),  # حتما پورت رو عدد بگیر
-        'username': config.get('bot', 'name')
-    })
-    print('Start')
+app = Flask(__name__)
 
-    @On(bot, "login")
-    def login(this):
-        bot.chat(config.get('bot', 'register'))
-        bot.chat(config.get('bot', 'login'))
-        print("Bot online")
+@app.route('/')
+def home():
+    return "Bot is running!"
 
-    @On(bot, "error")
-    def error(err, *a):
-        print("Connect ERROR: ", err, a)
+def start_bot():
+    while True:
+        try:
+            bot = mineflayer.createBot({
+                'host': config.get('server', 'host'),
+                'port': int(config.get('server', 'port')),
+                'username': config.get('bot', 'name')
+            })
 
-    @On(bot, "kicked")
-    def kicked(this, reason, *a):
-        print("I was kicked: ", reason, a)
-        print('Reconnecting...')
-        bot.end(); bot.join()
+            print("Bot starting...")
 
-    @On(bot, "chat")
-    def handle(this, username, message, *args):
-        if username == bot.username:
-            return
-        elif message.startswith(config.get('command', 'position')):
-            p = bot.entity.position
-            bot.chat(f"Bot > I am at {p.toString()}")
-        elif message.startswith(config.get('command', 'start')):
-            bot.chat('24 ATERNOS > Bot started! - Made By Fortcote')
-            bot.setControlState('forward', True)
-            bot.setControlState('jump', True)
-            bot.setControlState('sprint', True)
-        elif message.startswith(config.get('command', 'stop')):
-            bot.chat('24 ATERNOS > Bot stoped! - Made By Fortcote')
-            bot.clearControlStates()
+            @On(bot, "login")
+            def login(this):
+                bot.chat(config.get('bot', 'register'))
+                bot.chat(config.get('bot', 'login'))
+                print("Bot logged in.")
 
-    @On(bot, "spawn")
-    def spawn(this):
-        bot.chat("Bot > Spawned!")
+            @On(bot, "error")
+            def error(err, *a):
+                print("Connect ERROR:", err)
 
-    @On(bot, "death")
-    def death(this):
-        bot.chat("Bot > Respawn!")
+            @On(bot, "kicked")
+            def kicked(this, reason, *a):
+                print("I was kicked:", reason)
+                bot.end()
 
-def start():
-    global bott, stop_threads
-    stop_threads = False
-    bott = threading.Thread(target=started, args=(lambda: stop_threads,))
-    bott.start()
+            @On(bot, "chat")
+            def chat(this, username, message, *args):
+                if username == bot.username:
+                    return
+                elif message.startswith(config.get('command', 'position')):
+                    p = bot.entity.position
+                    bot.chat(f"Bot > I am at {p.toString()}")
+                elif message.startswith(config.get('command', 'start')):
+                    bot.chat('24 ATERNOS > Bot started! - Made By Fortcote')
+                    bot.setControlState('forward', True)
+                    bot.setControlState('jump', True)
+                    bot.setControlState('sprint', True)
+                elif message.startswith(config.get('command', 'stop')):
+                    bot.chat('24 ATERNOS > Bot stopped! - Made By Fortcote')
+                    bot.clearControlStates()
 
-def stop():
-    try:
-        if platform == "win32":
-            os.system('taskkill /f /im node.exe')
-        else:
-            os.system('killall node')
-        print("Bot offline")
-    except:
-        pass
+            @On(bot, "spawn")
+            def spawn(this):
+                bot.chat("Bot > Spawned!")
+
+            @On(bot, "death")
+            def death(this):
+                bot.chat("Bot > Respawn!")
+
+            break  # اتصال موفق بود، از loop خارج شو
+
+        except Exception as e:
+            print(f"[Retrying in 30s] Connection failed: {e}")
+            time.sleep(30)  # صبر کن و دوباره تلاش کن
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
 
 if __name__ == '__main__':
-    start()
+    _thread.start_new_thread(start_bot, ())  # اجرای بات در thread جدا
+    run_flask()  # اجرای Flask
