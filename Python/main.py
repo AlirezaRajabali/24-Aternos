@@ -93,6 +93,14 @@ def create_and_start_bot():
         time.sleep(5)
         create_and_start_bot()
 
+    @On(bot, 'error')
+    def on_error(this, err):
+        print(f"❌ Bot Error: {err}")
+
+    @On(bot, 'kicked')
+    def on_kicked(this, reason, loggedIn):
+        print(f"🚫 Kicked from server: {reason}")
+
     def random_movement():
         directions = ['forward', 'back', 'left', 'right']
         while actions.get('random_walk'):
@@ -128,17 +136,5 @@ def create_and_start_bot():
     auto_eat()
     auto_attack()
 
-# شروع با اتصال اولیه
-threading.Thread(target=create_and_start_bot).start()
-# ... (همه‌ی کدهای قبلی مثل بالا بدون تغییر)
-
-    @On(bot, 'error')
-    def on_error(this, err):
-        print(f"❌ Bot Error: {err}")
-
-    @On(bot, 'kicked')
-    def on_kicked(this, reason, loggedIn):
-        print(f"🚫 Kicked from server: {reason}")
-
-# شروع با اتصال اولیه
+# اجرای اولیه
 threading.Thread(target=create_and_start_bot).start()
