@@ -17,7 +17,9 @@ app = Flask(__name__)
 def home():
     return "Bot is running"
 
-threading.Thread(target=lambda: app.run(host="0.0.0.0", port=10000), daemon=True).start()
+# استفاده از PORT محیطی که Render فراهم می‌کند
+port = int(os.environ.get("PORT", 10000))
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port), daemon=True).start()
 
 config = ConfigParser()
 config.read('config.ini')
