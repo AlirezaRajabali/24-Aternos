@@ -130,3 +130,15 @@ def create_and_start_bot():
 
 # شروع با اتصال اولیه
 threading.Thread(target=create_and_start_bot).start()
+# ... (همه‌ی کدهای قبلی مثل بالا بدون تغییر)
+
+    @On(bot, 'error')
+    def on_error(this, err):
+        print(f"❌ Bot Error: {err}")
+
+    @On(bot, 'kicked')
+    def on_kicked(this, reason, loggedIn):
+        print(f"🚫 Kicked from server: {reason}")
+
+# شروع با اتصال اولیه
+threading.Thread(target=create_and_start_bot).start()
