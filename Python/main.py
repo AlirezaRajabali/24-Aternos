@@ -9,12 +9,21 @@ mineflayer = require('mineflayer')
 ### https://discord.gg/bjgpVAxgyE
 
 config = ConfigParser()
-config.read('config.ini')
+
+# مسیر دقیق config.ini رو تنظیم کن (فرض: config.ini کنار همین فایل main.py هست)
+config_path = os.path.join(os.path.dirname(__file__), 'config.ini')
+print(f"Reading config from: {config_path}")
+
+# حالا فایل کانفیگ رو بخون
+config.read(config_path)
+
+# برای اطمینان، بخش‌های فایل کانفیگ رو چاپ کن
+print("Config sections:", config.sections())
 
 def started(stop):
     bot = mineflayer.createBot({
         'host': config.get('server', 'host'),
-        'port': config.get('server', 'port'),
+        'port': int(config.get('server', 'port')),  # حتما پورت رو عدد بگیر
         'username': config.get('bot', 'name')
     })
     print('Start')
