@@ -1,74 +1,61 @@
 from configparser import ConfigParser
 from javascript import require, On
+from flask import Flask
 import threading, os
 from sys import platform
-from flask import Flask  # افزوده‌شده برای UptimeRobot
 
 mineflayer = require('mineflayer')
 
-### By Fortcote
-### https://discord.gg/bjgpVAxgyE
-
-# --- تنظیمات Flask برای UptimeRobot ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running"
-
-def run_flask():
-    app.run(host="0.0.0.0", port=8080)  # پورت 8080 معمولاً در Render مجازه
-
-threading.Thread(target=run_flask).start()  # اجرای Flask در ترد جداگانه
-
-# --- تنظیمات کانفیگ ---
+# -----------------------
+# خواندن فایل config.ini
+# -----------------------
 config = ConfigParser()
-
 config_path = os.path.join(os.path.dirname(__file__), 'config.ini')
-print(f"Reading config from: {config_path}")
-
 config.read(config_path)
-print("Config sections:", config.sections())
 
-# --- راه‌اندازی بات ماین‌کرفت ---
+# -----------------------
+# ساختن بات ماینکرفت
+# -----------------------
 def started(stop):
     bot = mineflayer.createBot({
         'host': config.get('server', 'host'),
         'port': int(config.get('server', 'port')),
         'username': config.get('bot', 'name')
     })
-    print('Start')
+
+    print("Bot started")
 
     @On(bot, "login")
     def login(this):
         bot.chat(config.get('bot', 'register'))
         bot.chat(config.get('bot', 'login'))
-        print("Bot online")
+        print("Bot logged in")
 
     @On(bot, "error")
     def error(err, *a):
-        print("Connect ERROR: ", err, a)
+        print("Connect ERROR:", err)
 
     @On(bot, "kicked")
     def kicked(this, reason, *a):
-        print("I was kicked: ", reason, a)
-        print('Reconnecting...')
-        bot.end(); bot.join()
+        print("I was kicked:", reason)
+        print("Reconnecting...")
+        bot.end()
+        bot.join()
 
     @On(bot, "chat")
     def handle(this, username, message, *args):
         if username == bot.username:
             return
-        elif message.startswith(config.get('command', 'position')):
+        if message.startswith(config.get('command', 'position')):
             p = bot.entity.position
             bot.chat(f"Bot > I am at {p.toString()}")
         elif message.startswith(config.get('command', 'start')):
-            bot.chat('24 ATERNOS > Bot started! - Made By Fortcote')
+            bot.chat("24 ATERNOS > Bot started! - Made By Fortcote")
             bot.setControlState('forward', True)
             bot.setControlState('jump', True)
             bot.setControlState('sprint', True)
         elif message.startswith(config.get('command', 'stop')):
-            bot.chat('24 ATERNOS > Bot stoped! - Made By Fortcote')
+            bot.chat("24 ATERNOS > Bot stopped! - Made By Fortcote")
             bot.clearControlStates()
 
     @On(bot, "spawn")
@@ -79,6 +66,9 @@ def started(stop):
     def death(this):
         bot.chat("Bot > Respawn!")
 
+# -----------------------
+# توابع اجرا و توقف
+# -----------------------
 def start():
     global bott, stop_threads
     stop_threads = False
@@ -95,5 +85,21 @@ def stop():
     except:
         pass
 
+# -----------------------
+# Flask برای Uptime Robot
+# -----------------------
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
+# -----------------------
+# اجرای نهایی
+# -----------------------
 if __name__ == '__main__':
     start()
+    threading.Thread(target=run_flask).start()
