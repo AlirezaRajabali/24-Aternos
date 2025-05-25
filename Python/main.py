@@ -1,20 +1,11 @@
-from flask import Flask
-import os, threading, random, time
-from sys import platform
 from configparser import ConfigParser
 from javascript import require, On
+from flask import Flask
+import threading, os, random, time
+from sys import platform
 
 mineflayer = require('mineflayer')
-autoeat = require('mineflayer-auto-eat')
-pathfinder = require('mineflayer-pathfinder').pathfinder
-{ GoalNear, GoalBlock } = require('mineflayer-pathfinder').goals
-collectBlock = require('mineflayer-collectblock').plugin
-pvp = require('mineflayer-pvp').plugin
-armorManager = require('mineflayer-armor-manager')
-mcData = require('minecraft-data')
-
-config = ConfigParser()
-config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+Vec3 = require('vec3')
 
 app = Flask(__name__)
 
@@ -24,117 +15,195 @@ def home():
 
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
+
 threading.Thread(target=run_flask).start()
 
-def start_bot():
+config = ConfigParser()
+config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+
+def started(stop):
     bot = mineflayer.createBot({
         'host': config.get('server', 'host'),
         'port': int(config.get('server', 'port')),
         'username': config.get('bot', 'name')
     })
 
-    bot.loadPlugin(pathfinder)
-    bot.loadPlugin(collectBlock)
-    bot.loadPlugin(autoeat)
-    bot.loadPlugin(pvp)
-    bot.loadPlugin(armorManager)
-
-    bot.once('spawn', lambda: bot.chat("Bot > Spawned!"))
-
     @On(bot, 'login')
-    def handle_login(this):
+    def login(this):
         bot.chat(config.get('bot', 'register'))
         bot.chat(config.get('bot', 'login'))
+        print("Bot online")
+
+    @On(bot, 'spawn')
+    def spawn(this):
+        bot.chat("Spawned and ready!")
+        random_move()
 
     @On(bot, 'chat')
-    def chat(this, username, message, *_):
+    def chat(this, username, message, *args):
         if username == bot.username:
             return
 
-        args = message.split()
-        cmd = args[0]
+        def get_cmd(key):
+            return config.get('command', key)
 
-        if cmd == config.get('command', 'position'):
-            bot.chat(f"Bot > I'm at {bot.entity.position}")
+        if message.startswith(get_cmd('position')):
+            p = bot.entity.position
+            bot.chat(f"I'm at {p}")
 
-        elif cmd == config.get('command', 'start'):
-            bot.setControlState('forward', True)
-            bot.setControlState('jump', True)
-            bot.setControlState('sprint', True)
-            bot.chat("Bot started!")
+        elif message.startswith(get_cmd('start')):
+            bot.chat("Starting movement")
+            random_move()
 
-        elif cmd == config.get('command', 'stop'):
+        elif message.startswith(get_cmd('stop')):
             bot.clearControlStates()
-            bot.chat("Bot stopped!")
+            bot.chat("Stopped moving")
 
-        elif cmd == ';follow' and len(args) > 1:
-            target = bot.players[args[1]]
+        elif message.startswith(get_cmd('follow')):
+            name = message.split(' ')[1]
+            target = bot.players.get(name)
             if target and target.entity:
-                bot.pathfinder.setGoal(GoalNear(target.entity.position.x, target.entity.position.y, target.entity.position.z, 1))
-                bot.chat(f"Following {args[1]}")
+                bot.chat(f"Following {name}")
+                bot.pathfinder.setGoal(mineflayer.pathfinder.goals.GoalFollow(target.entity, 1))
 
-        elif cmd == ';collect' and len(args) > 2:
-            item, count = args[1], int(args[2])
-            blocks = bot.findBlocks({
-                'matching': mcData(bot.version).itemsByName[item].id,
-                'maxDistance': 64,
-                'count': count
-            })
-            if blocks:
+        elif message.startswith(get_cmd('collect')):
+            try:
+                _, item, count = message.split()
+                count = int(count)
                 bot.chat(f"Collecting {count} {item}")
-                bot.collectBlock.collect(blocks[:count], lambda err: bot.chat(f"Done collecting {item}" if not err else f"Error: {err}"))
+                collect_item(item, count)
+            except:
+                bot.chat("Usage: ;collect <item> <count>")
 
-        elif cmd == ';drop' and len(args) > 2:
-            item, count = args[1], int(args[2])
-            for i in bot.inventory.items():
-                if i.name == item:
-                    dropCount = min(i.count, count)
-                    bot.toss(i.type, None, dropCount, lambda err: bot.chat(f"Dropped {dropCount} {item}" if not err else f"Drop error: {err}"))
-                    break
+        elif message.startswith(get_cmd('drop')):
+            try:
+                _, item, count = message.split()
+                count = int(count)
+                drop_item(item, count)
+            except:
+                bot.chat("Usage: ;drop <item> <count>")
 
-        elif cmd == ';killmobs':
-            mobs = [e for e in bot.entities.values() if e.kind == 'Hostile mobs']
-            if mobs:
-                bot.pvp.attack(mobs[0])
-                bot.chat("Attacking mob!")
+        elif message.startswith(get_cmd('biome')):
+            name = message.split(' ')[1].lower()
+            bot.chat(f"Looking for biome {name}")
+            # نیاز به پلاگین یا اسکن بایوم‌ها دارد (برای توسعه کامل)
 
-        elif cmd == ';hunt':
-            animals = [e for e in bot.entities.values() if e.name in ['cow', 'sheep', 'pig', 'chicken']]
-            if animals:
-                bot.pvp.attack(animals[0])
-                bot.chat(f"Hunting {animals[0].name}!")
+        elif message.startswith(get_cmd('plant')):
+            plant_seed()
 
-        elif cmd == ';biome' and len(args) > 1:
-            target_biome = args[1].lower()
-            bot.chat(f"Searching for biome {target_biome} (placeholder only)")
-            # Real biome navigation requires mapping and scanning, placeholder for now
+        elif message.startswith(get_cmd('bridge')):
+            build_bridge()
 
-        elif cmd == ';plant':
-            seeds = [i for i in bot.inventory.items() if 'seeds' in i.name]
-            if seeds:
-                bot.chat("Planting seeds")
-                # Simplified: actual planting logic needs block checking, etc
+        elif message.startswith(get_cmd('hunt')):
+            hunt_animals()
 
-        elif cmd == ';bridge':
-            bot.chat("Building a bridge forward (placeholder only)")
-            # Full bridge building logic needs location tracking and block placement
+        elif message.startswith(get_cmd('armor')):
+            equip_armor()
 
-        elif cmd == ';armor':
-            bot.chat("Equipping best armor")
-            bot.armorManager.equipAll()
+        elif message.startswith(get_cmd('eat')):
+            eat_food()
 
-        elif cmd == ';eat':
-            bot.chat("Trying to eat food")
-            bot.autoEat.enable()
+    def random_move():
+        def loop():
+            while True:
+                time.sleep(random.randint(10, 20))
+                if random.choice([True, False]):
+                    bot.setControlState('forward', True)
+                    bot.setControlState('jump', True)
+                    time.sleep(2)
+                    bot.clearControlStates()
+        threading.Thread(target=loop).start()
 
-    def random_movement():
-        while True:
-            if bot.entity:
-                bot.setControlState('forward', bool(random.getrandbits(1)))
-                bot.setControlState('jump', bool(random.getrandbits(1)))
-            time.sleep(10)
+    def collect_item(name, target_count):
+        count = 0
+        def cb(block):
+            return block.name == name
+        blocks = bot.findBlocks({'matching': cb, 'maxDistance': 64, 'count': 100})
+        for pos in blocks:
+            if count >= target_count:
+                break
+            bot.dig(bot.blockAt(pos))
+            count += 1
+        bot.chat(f"Collected {count} {name}")
 
-    threading.Thread(target=random_movement).start()
+    def drop_item(name, count):
+        for item in bot.inventory.items():
+            if item.name == name:
+                bot.toss(item.type, None, min(count, item.count))
+                bot.chat(f"Dropped {min(count, item.count)} {name}")
+                break
+
+    def plant_seed():
+        for slot in bot.inventory.items():
+            if 'seeds' in slot.name:
+                bot.equip(slot, 'hand')
+                for dx in range(-5, 5):
+                    for dz in range(-5, 5):
+                        pos = bot.entity.position.offset(dx, -1, dz)
+                        block = bot.blockAt(pos)
+                        if block and block.name == 'farmland':
+                            bot.placeBlock(block, Vec3(0, 1, 0))
+                            bot.chat("Seed planted")
+                            return
+
+    def build_bridge():
+        forward = bot.entity.position.offset(0, -1, 1)
+        block = bot.blockAt(forward)
+        if block and block.name == 'air':
+            for item in bot.inventory.items():
+                if 'planks' in item.name:
+                    bot.equip(item, 'hand')
+                    bot.placeBlock(bot.blockAt(bot.entity.position.offset(0, -1, 0)), Vec3(0, 1, 0))
+                    bot.chat("Bridge placed")
+                    return
+
+    def hunt_animals():
+        targets = [e for e in bot.entities.values() if e.name in ['cow', 'sheep', 'pig', 'chicken']]
+        for target in targets:
+            bot.attack(target)
+            bot.chat(f"Attacked {target.name}")
+
+    def equip_armor():
+        for item in bot.inventory.items():
+            if 'helmet' in item.name or 'chestplate' in item.name or 'leggings' in item.name or 'boots' in item.name:
+                bot.equip(item, 'torso')
+                bot.chat("Armor equipped")
+
+    def eat_food():
+        for item in bot.inventory.items():
+            if 'cooked' in item.name or 'beef' in item.name or 'porkchop' in item.name:
+                bot.equip(item, 'hand')
+                bot.consume()
+                bot.chat("Ate food")
+                return
+
+    @On(bot, 'death')
+    def died(this):
+        bot.chat("I died! Respawning...")
+
+    @On(bot, 'kicked')
+    def kicked(this, reason):
+        print("Kicked:", reason)
+        bot.chat("Disconnected")
+
+    @On(bot, 'error')
+    def error(err):
+        print("Error:", err)
+
+
+def start():
+    global bot_thread
+    bot_thread = threading.Thread(target=started, args=(lambda: False,))
+    bot_thread.start()
+
+def stop():
+    try:
+        if platform == "win32":
+            os.system('taskkill /f /im node.exe')
+        else:
+            os.system('killall node')
+    except:
+        pass
 
 if __name__ == '__main__':
-    threading.Thread(target=start_bot).start()
+    start()
