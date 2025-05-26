@@ -1,13 +1,1 @@
-{
-  "name": "mineflayer-bot",
-  "version": "1.0.0",
-  "description": "Advanced Minecraft Bot with Persian commands",
-  "main": "bot.js",
-  "dependencies": {
-    "mineflayer": "^4.12.0",
-    "mineflayer-pathfinder": "^2.3.2",
-    "mineflayer-collectblock": "^1.4.1",
-    "mineflayer-pvp": "^1.5.1",
-    "mineflayer-auto-eat": "^2.1.1"
-  }
-}
+
