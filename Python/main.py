@@ -28,7 +28,7 @@ def try_reconnect():
 
 def random_behavior_loop():
     while True:
-        time.sleep(random.randint(30, 60))
+        time.sleep(random.randint(10))
         if not bot or not bot.entity or not bot.entity.position:
             continue
         action = random.choice(['jump', 'sneak', 'walk', 'chat'])
