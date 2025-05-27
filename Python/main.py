@@ -20,36 +20,51 @@ def try_reconnect():
     global reconnect_attempts
     if reconnect_attempts < max_reconnect_attempts:
         reconnect_attempts += 1
-        print(f"تلاش برای ری‌کانکت ({reconnect_attempts}/{max_reconnect_attempts}) در ۵ ثانیه...")
+        print(f"🔁 تلاش برای ری‌کانکت ({reconnect_attempts}/{max_reconnect_attempts}) در ۵ ثانیه...")
         time.sleep(5)
         started(lambda: False)
     else:
-        print("تعداد تلاش‌های ری‌کانکت به حد نصاب رسید. بات متوقف شد.")
+        print("❌ تلاش‌های ری‌کانکت تموم شد. بات متوقف شد.")
 
-def random_behavior_loop():
+def afk_bypass_loop():
+    directions = ['forward', 'back', 'left', 'right']
     while True:
-        time.sleep(random.randint(10))
+        time.sleep(5)
         if not bot or not bot.entity or not bot.entity.position:
             continue
-        action = random.choice(['jump', 'sneak', 'walk', 'chat'])
+
+        action = random.choice(['move', 'jump', 'sneak', 'chat', 'stop'])
         if action == 'jump':
             bot.setControlState('jump', True)
-            time.sleep(1)
+            time.sleep(0.5)
             bot.setControlState('jump', False)
+
         elif action == 'sneak':
             bot.setControlState('sneak', True)
             time.sleep(2)
             bot.setControlState('sneak', False)
-        elif action == 'walk':
-            bot.setControlState('forward', True)
-            time.sleep(3)
-            bot.setControlState('forward', False)
+
         elif action == 'chat':
-            bot.chat(random.choice(["من هنوز اینجام!", "زنده‌ام 😎", "ربات فعال است."]))
+            msg = random.choice([
+                "🤖 من یک بازیکنم!",
+                "هی! اینجا چه خبره؟",
+                "🟢 آنلاین هستم هنوز!",
+                "بازم AFK فکر کردی؟ نه عزیزم"
+            ])
+            bot.chat(msg)
+
+        elif action == 'move':
+            dir = random.choice(directions)
+            bot.setControlState(dir, True)
+            time.sleep(random.uniform(1, 2))
+            bot.setControlState(dir, False)
+
+        elif action == 'stop':
+            bot.clearControlStates()
 
 def started(stop):
     global bot, reconnect_attempts
-    reconnect_attempts = 0  # ریست شمارنده وقتی بات موفق شد وصل بشه
+    reconnect_attempts = 0
 
     bot = mineflayer.createBot({
         'host': config.get('server', 'host'),
@@ -61,12 +76,12 @@ def started(stop):
     def login(this):
         bot.chat(config.get('bot', 'register'))
         bot.chat(config.get('bot', 'login'))
-        print("Bot logged in")
+        print("✅ وارد حساب شد")
 
     @On(bot, "spawn")
     def spawn(this):
         bot.chat("✅ وارد بازی شدم!")
-        threading.Thread(target=random_behavior_loop, daemon=True).start()
+        threading.Thread(target=afk_bypass_loop, daemon=True).start()
 
     @On(bot, "chat")
     def handle(this, username, message, *args):
@@ -76,24 +91,23 @@ def started(stop):
             p = bot.entity.position
             bot.chat(f"I'm at {p.toString()}")
         elif message.startswith(config.get('command', 'start')):
-            bot.chat("Starting...")
+            bot.chat("▶️ در حال حرکت...")
             bot.setControlState('forward', True)
             bot.setControlState('jump', True)
             bot.setControlState('sprint', True)
         elif message.startswith(config.get('command', 'stop')):
-            bot.chat("Stopping...")
+            bot.chat("⏹️ توقف!")
             bot.clearControlStates()
         elif message.startswith(";follow "):
             name = message.split(" ", 1)[1]
             target = bot.players.get(name)
             if target and target.entity:
-                bot.chat(f"Following {name}")
+                bot.chat(f"🔁 دنبال کردن {name}")
                 bot.lookAt(target.entity.position.offset(0, 1.6, 0))
                 bot.setControlState('forward', True)
             else:
                 bot.chat("❌ پلیر پیدا نشد.")
         elif message.startswith(";eat"):
-            # توجه: این قسمت جاوااسکریپت بود، با توجه به محدودیت ها ممکنه نیاز به اصلاح باشه
             food = None
             for item in bot.inventory.items():
                 if 'bread' in item.name or 'apple' in item.name:
@@ -108,17 +122,17 @@ def started(stop):
                 bot.chat("⚔️ حمله به ماب نزدیک...")
                 bot.attack(nearest)
             else:
-                bot.chat("مابی نزدیک نیست.")
+                bot.chat("❌ مابی نزدیک نیست.")
 
     @On(bot, "error")
     def error(this, err, *a):
-        print("Bot error:", err)
+        print("❌ خطا:", err)
         bot.end()
         try_reconnect()
 
     @On(bot, "kicked")
     def kicked(this, reason, *a):
-        print("Kicked:", reason)
+        print("⛔ کیک شد:", reason)
         bot.end()
         try_reconnect()
 
