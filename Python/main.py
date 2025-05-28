@@ -28,39 +28,80 @@ def try_reconnect():
 
 def afk_bypass_loop():
     directions = ['forward', 'back', 'left', 'right']
+    last_pause_time = time.time()
+    last_action_time = time.time()
+    last_spin_time = time.time()
+    is_spinning = False
+    yaw = 0
+    pitch = 0
+
+    current_direction = random.choice(directions)
+    bot.setControlState(current_direction, True)
+
     while True:
-        time.sleep(5)
+        time.sleep(0.1)
+        now = time.time()
+
         if not bot or not bot.entity or not bot.entity.position:
             continue
 
-        action = random.choice(['move', 'jump', 'sneak', 'chat', 'stop'])
-        if action == 'jump':
-            bot.setControlState('jump', True)
-            time.sleep(0.5)
-            bot.setControlState('jump', False)
+        # هر چند وقت چرخش دور خودش
+        if now - last_spin_time >= random.randint(15, 30):
+            last_spin_time = now
+            is_spinning = True
+            spin_start = time.time()
 
-        elif action == 'sneak':
-            bot.setControlState('sneak', True)
-            time.sleep(2)
-            bot.setControlState('sneak', False)
+        if is_spinning:
+            yaw += 0.2
+            bot.look(yaw, pitch)
+            if time.time() - spin_start > 3:
+                is_spinning = False
 
-        elif action == 'chat':
+        # تغییر حرکت زیگزاگی یا تصادفی
+        if random.random() < 0.01:
+            bot.clearControlStates()
+            pattern = random.choice(['straight', 'zigzag'])
+            if pattern == 'straight':
+                current_direction = random.choice(directions)
+                bot.setControlState(current_direction, True)
+            elif pattern == 'zigzag':
+                bot.setControlState('forward', True)
+                if random.random() < 0.5:
+                    bot.setControlState('left', True)
+                else:
+                    bot.setControlState('right', True)
+                threading.Timer(2, lambda: bot.clearControlStates()).start()
+
+        # اکشن‌های ساده مثل پرش یا نشست
+        if now - last_action_time >= 2:
+            last_action_time = now
+            action = random.choice(['jump', 'sneak'])
+            if action == 'jump':
+                bot.setControlState('jump', True)
+                time.sleep(0.5)
+                bot.setControlState('jump', False)
+            elif action == 'sneak':
+                bot.setControlState('sneak', True)
+                time.sleep(1)
+                bot.setControlState('sneak', False)
+
+        # چت تصادفی برای رد کردن AFK
+        if now - last_pause_time >= 60:
+            last_pause_time = now
+            bot.clearControlStates()
             msg = random.choice([
-                "🤖 من یک بازیکنم!",
-                "هی! اینجا چه خبره؟",
-                "🟢 آنلاین هستم هنوز!",
-                "بازم AFK فکر کردی؟ نه عزیزم"
+                "😴 یه استراحت کوتاه لازمه...",
+                "🛑 وایسا ببینم چی شد!",
+                "🤖 هنوز اینجام نگران نباش!",
+                "⏸️ استراحت سه ثانیه‌ای!",
+                "🕒 وقفه کوتاه برای شارژ انرژی!",
+                "🥱 خسته شدم، یه لحظه وایسا...",
+                "😐 چرا اینقد راه میرم؟"
             ])
             bot.chat(msg)
-
-        elif action == 'move':
-            dir = random.choice(directions)
-            bot.setControlState(dir, True)
-            time.sleep(random.uniform(1, 2))
-            bot.setControlState(dir, False)
-
-        elif action == 'stop':
-            bot.clearControlStates()
+            time.sleep(3)
+            current_direction = random.choice(directions)
+            bot.setControlState(current_direction, True)
 
 def started(stop):
     global bot, reconnect_attempts
@@ -148,4 +189,3 @@ if __name__ == '__main__':
     start_bot()
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
-
